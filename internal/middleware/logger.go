@@ -8,7 +8,6 @@ import (
 )
 
 func LoggerMiddleware() gin.HandlerFunc {
-	logger := logrus.New()
 
 	return func(ctx *gin.Context) {
 		start := time.Now()
@@ -17,12 +16,25 @@ func LoggerMiddleware() gin.HandlerFunc {
 
 		latency := time.Since(start)
 		status := ctx.Writer.Status()
+		clientIP := ctx.ClientIP()
+		method := ctx.Request.Method
+		path := ctx.Request.URL.Path
 
-		logger.WithFields(logrus.Fields{
-			"method":  ctx.Request.Method,
-			"path":    ctx.Request.URL.Path,
-			"status":  status,
-			"latency": latency,
-		}).Info("request completed")
+		entry := logrus.WithFields(logrus.Fields{
+			"status":   status,
+			"latency":  latency,
+			"clientIP": clientIP,
+			"method":   method,
+			"path":     path,
+		})
+
+		switch {
+		case status >= 500:
+			entry.Error("Server error")
+		case status >= 400:
+			entry.Warn("Client error")
+		default:
+			entry.Info("Request completed")
+		}
 	}
 }

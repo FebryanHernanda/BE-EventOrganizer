@@ -6,13 +6,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRouter(HealthHandler *handlers.HealthHandler) *gin.Engine {
+type RouteHandler struct {
+	Health *handlers.HealthHandler
+	Auth   *handlers.AuthHandler
+}
+
+func SetupRouter(rh *RouteHandler) *gin.Engine {
 	router := gin.New()
 
 	router.Use(gin.Recovery())
 	router.Use(middleware.LoggerMiddleware())
 
-	router.GET("/Health", HealthHandler.HealthCheck)
+	router.GET("/Health", rh.Health.HealthCheck)
+
+	AuthRoutes(router, rh.Auth)
 
 	return router
 }

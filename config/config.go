@@ -38,7 +38,7 @@ func ConnectMongo() (*mongo.Client, *mongo.Database, error) {
 	}
 
 	db := client.Database(dbName)
-	logrus.Info("Connected to MongoDB Atlas")
+	logrus.Infof("Connected to MongoDB Atlas, database: %s", dbName)
 
 	return client, db, nil
 

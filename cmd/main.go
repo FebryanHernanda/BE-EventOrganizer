@@ -27,11 +27,22 @@ func main() {
 		port = "8080"
 	}
 
-	repo := repository.NewHealthRepository(db)
-	service := services.NewHealthService(repo)
-	handler := handlers.NewHealthHandler(service)
+	jwtSecret := os.Getenv("JWT_SECRET")
 
-	router := routers.SetupRouter(handler)
+	healthRepo := repository.NewHealthRepository(db)
+	healthService := services.NewHealthService(healthRepo)
+	healthHandler := handlers.NewHealthHandler(healthService)
+
+	userRepo := repository.NewUserRepository(db)
+	authService := services.NewAuthService(userRepo, jwtSecret)
+	authHandler := handlers.NewAuthHandler(authService)
+
+	rh := &routers.RouteHandler{
+		Health: healthHandler,
+		Auth:   authHandler,
+	}
+
+	router := routers.SetupRouter(rh)
 
 	fmt.Println("Server running on port:", port)
 	router.Run(":" + port)
