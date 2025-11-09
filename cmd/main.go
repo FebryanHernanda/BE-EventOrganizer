@@ -36,13 +36,16 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	authService := services.NewAuthService(userRepo, jwtSecret)
 	authHandler := handlers.NewAuthHandler(authService)
+	userService := services.NewUserService(userRepo, jwtSecret)
+	userHandler := handlers.NewUserHandler(userService)
 
 	rh := &routers.RouteHandler{
 		Health: healthHandler,
 		Auth:   authHandler,
+		User:   userHandler,
 	}
 
-	router := routers.SetupRouter(rh)
+	router := routers.SetupRouter(rh, jwtSecret)
 
 	fmt.Println("Server running on port:", port)
 	router.Run(":" + port)
