@@ -107,7 +107,6 @@ func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (stri
 		logrus.WithError(err).Error("Failed to sign token")
 		return "", err
 	}
-	logrus.WithField("token", tokenString).Info("Generated JWT token")
 
 	logrus.WithField("email", req.Email).Info("Login successfully")
 	return tokenString, nil
