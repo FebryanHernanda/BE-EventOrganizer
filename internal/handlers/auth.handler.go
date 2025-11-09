@@ -34,9 +34,9 @@ func (h *AuthHandler) Register(ctx *gin.Context) {
 		return
 	}
 
-	logrus.WithField("email", req.Email).Info("User registration validated successfully")
+	logrus.WithField("email", req.Email).Info("User registration successfully")
 
-	response.Success(ctx, req, "User registration validated successfully")
+	response.Success(ctx, nil, "User registration successfully")
 }
 
 func (h *AuthHandler) Login(ctx *gin.Context) {
@@ -57,6 +57,8 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 		response.Error(ctx, err.Error(), 401, nil)
 		return
 	}
+
+	logrus.WithField("email", req.Email).Info("User login successfully")
 
 	response.Success(ctx, gin.H{
 		"token": token,
