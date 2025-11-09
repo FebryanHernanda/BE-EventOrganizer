@@ -11,7 +11,7 @@ type User struct {
 	FullName   string             `bson:"fullname" json:"fullname"`
 	Username   string             `bson:"username" json:"username"`
 	Email      string             `bson:"email" json:"email"`
-	Password   string             `bson:"password" json:"password"`
+	Password   string             `bson:"password" json:"-"`
 	Role       string             `bson:"role" json:"role"`
 	ProfilePic string             `bson:"profile_pic,omitempty" json:"profile_pic,omitempty"`
 	IsActive   bool               `bson:"is_active" json:"is_active"`
