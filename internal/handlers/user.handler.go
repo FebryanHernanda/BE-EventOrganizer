@@ -17,6 +17,17 @@ func NewUserHandler(userService *services.UserService) *UserHandler {
 	}
 }
 
+// Me godoc
+// @Summary     Get logged-in user profile
+// @Description Return profile of the current logged-in user (no password).
+// @Tags        User
+// @Accept      json
+// @Produce     json
+// @Security    Bearer
+// @Success     200 {object} models.User "user profile (password hidden by json:\"-\")"
+// @Failure     401 {object} map[string]interface{} "Unauthorized"
+// @Failure     500 {object} map[string]interface{} "Server error"
+// @Router      /user/me [get]
 func (h *UserHandler) Me(ctx *gin.Context) {
 	userIDVal, exists := ctx.Get("user_id")
 	if !exists {

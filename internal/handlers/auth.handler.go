@@ -16,6 +16,16 @@ func NewAuthHandler(authService *services.AuthService) *AuthHandler {
 	return &AuthHandler{AuthService: authService}
 }
 
+// Register godoc
+// @Summary     Register a new user
+// @Description Register new user. Returns only status and message (no data).
+// @Tags        Auth
+// @Accept      json
+// @Produce     json
+// @Param       body  body     models.RegisterRequest true "Register payload"
+// @Success     201   {object} map[string]interface{} "Created (no data)"
+// @Failure     400   {object} map[string]interface{} "Bad request"
+// @Router      /auth/register [post]
 func (h *AuthHandler) Register(ctx *gin.Context) {
 	var req models.RegisterRequest
 

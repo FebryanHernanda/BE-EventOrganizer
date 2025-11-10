@@ -4,6 +4,10 @@ import (
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/handlers"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/middleware"
 	"github.com/gin-gonic/gin"
+
+	_ "github.com/FebryanHernanda/BE-EventOrganizer/docs"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 type RouteHandler struct {
@@ -18,10 +22,12 @@ func SetupRouter(rh *RouteHandler, jwtSecret string) *gin.Engine {
 	router.Use(gin.Recovery())
 	router.Use(middleware.LoggerMiddleware())
 
+	// Routes
 	router.GET("/Health", rh.Health.HealthCheck)
-
 	AuthRoutes(router, rh.Auth)
 	UserRoutes(router, rh.User, jwtSecret)
+
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	return router
 }

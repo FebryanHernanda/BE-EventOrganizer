@@ -12,6 +12,20 @@ import (
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/services"
 )
 
+// @title BE Event Organizer API
+// @version 1.0
+// @description API for BE-EventOrganizer
+// @termsOfService http://example.com/terms/
+
+// @contact.name API Support
+// @contact.url http://www.example.com/support
+// @contact.email support@example.com
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:8080
+// @BasePath /
 func main() {
 	config.LoadEnv()
 	config.ConnectMongo()
