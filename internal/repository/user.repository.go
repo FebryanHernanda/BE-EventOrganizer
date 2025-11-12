@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/FebryanHernanda/BE-EventOrganizer/internal/models"
+	modelUser "github.com/FebryanHernanda/BE-EventOrganizer/internal/models/user"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -12,22 +12,24 @@ import (
 )
 
 type UserRepository struct {
-	Collection *mongo.Collection
+	Collection           *mongo.Collection
+	ActivationCollection *mongo.Collection
 }
 
 func NewUserRepository(db *mongo.Database) *UserRepository {
 	return &UserRepository{
-		Collection: db.Collection("users"),
+		Collection:           db.Collection("users"),
+		ActivationCollection: db.Collection("activation_tokens"),
 	}
 }
 
-func (r *UserRepository) CreateUser(ctx context.Context, user *models.User) error {
+func (r *UserRepository) CreateUser(ctx context.Context, user *modelUser.User) error {
 	_, err := r.Collection.InsertOne(ctx, user)
 	return err
 }
 
-func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models.User, error) {
-	var user models.User
+func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*modelUser.User, error) {
+	var user modelUser.User
 	err := r.Collection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -42,8 +44,8 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models
 	return &user, err
 }
 
-func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*models.User, error) {
-	var user models.User
+func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*modelUser.User, error) {
+	var user modelUser.User
 	err := r.Collection.FindOne(ctx, bson.M{"username": username}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -57,14 +59,14 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 	return &user, nil
 }
 
-func (r *UserRepository) GetByID(ctx context.Context, id string) (*models.User, error) {
+func (r *UserRepository) GetByID(ctx context.Context, id string) (*modelUser.User, error) {
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		logrus.WithField("userID", id).WithError(err).Error("Invalid ObjectID")
 		return nil, err
 	}
 
-	var user models.User
+	var user modelUser.User
 	err = r.Collection.FindOne(ctx, bson.M{"_id": objID}).Decode(&user)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
@@ -76,4 +78,16 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*models.User, 
 	}
 
 	return &user, nil
+}
+
+func (r *UserRepository) ActivateUser(ctx context.Context, userID string) error {
+	objID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return err
+	}
+	_, err = r.Collection.UpdateOne(ctx, bson.M{"_id": objID}, bson.M{"$set": bson.M{"is_active": true}})
+	if err != nil {
+		logrus.WithError(err).Error("Failed to activate user")
+	}
+	return err
 }

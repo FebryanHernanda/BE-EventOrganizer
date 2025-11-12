@@ -3,24 +3,26 @@ package services
 import (
 	"context"
 
-	"github.com/FebryanHernanda/BE-EventOrganizer/internal/models"
+	modelUser "github.com/FebryanHernanda/BE-EventOrganizer/internal/models/user"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/repository"
 	"github.com/sirupsen/logrus"
 )
 
 type UserService struct {
+	AuthRepo  *repository.AuthRepository
 	UserRepo  *repository.UserRepository
 	JWTSecret string
 }
 
-func NewUserService(userRepo *repository.UserRepository, jwtSecret string) *UserService {
+func NewUserService(authRepo *repository.AuthRepository, userRepo *repository.UserRepository, jwtSecret string) *UserService {
 	return &UserService{
+		AuthRepo:  authRepo,
 		UserRepo:  userRepo,
 		JWTSecret: jwtSecret,
 	}
 }
 
-func (s *UserService) GetProfile(ctx context.Context, userID string) (*models.User, error) {
+func (s *UserService) GetProfile(ctx context.Context, userID string) (*modelUser.User, error) {
 	logrus.WithField("userID", userID).Info("Attempting get profile")
 
 	user, err := s.UserRepo.GetByID(ctx, userID)

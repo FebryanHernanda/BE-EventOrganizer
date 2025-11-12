@@ -2,31 +2,90 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 
-	"github.com/FebryanHernanda/BE-EventOrganizer/internal/models"
+	"github.com/FebryanHernanda/BE-EventOrganizer/config"
+	modelAuth "github.com/FebryanHernanda/BE-EventOrganizer/internal/models/auth"
+	modelUser "github.com/FebryanHernanda/BE-EventOrganizer/internal/models/user"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/repository"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
+	"gopkg.in/gomail.v2"
 )
 
 type AuthService struct {
-	UserRepo  *repository.UserRepository
-	JWTSecret string
+	UserRepo   *repository.UserRepository
+	JWTSecret  string
+	SMTPConfig config.SMTPConfig
 }
 
-func NewAuthService(userRepo *repository.UserRepository, jwtSecret string) *AuthService {
+func NewAuthService(userRepo *repository.UserRepository, jwtSecret string, smtp config.SMTPConfig) *AuthService {
 	return &AuthService{
-		UserRepo:  userRepo,
-		JWTSecret: jwtSecret,
+		UserRepo:   userRepo,
+		JWTSecret:  jwtSecret,
+		SMTPConfig: smtp,
 	}
 }
 
-func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest) error {
+/* Activation Account */
+
+func generateActivationToken() (string, error) {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+func (s *AuthService) sendActivationEmail(to, token string) error {
+	link := fmt.Sprintf("http://localhost:8080/auth/activate?token=%s", token)
+	m := gomail.NewMessage()
+	m.SetHeader("From", s.SMTPConfig.From)
+	m.SetHeader("To", to)
+	m.SetHeader("Subject", "Activate your account")
+	m.SetBody("text/html", fmt.Sprintf("<p>Click <a href='%s'>here</a> to activate your account.</p>", link))
+
+	d := gomail.NewDialer(s.SMTPConfig.Host, s.SMTPConfig.Port, s.SMTPConfig.Username, s.SMTPConfig.Password)
+	if err := d.DialAndSend(m); err != nil {
+		logrus.WithError(err).Error("Failed to send activation email")
+		return err
+	}
+
+	logrus.WithField("email", to).Info("Activation email sent successfully")
+	return nil
+}
+
+func (s *AuthService) ActivateAccount(ctx context.Context, token string) error {
+	at, err := s.UserRepo.FindActivationToken(ctx, token)
+	if err != nil {
+		return errors.New("invalid token")
+	}
+	if at == nil {
+		return errors.New("token not found or already used")
+	}
+
+	if err := s.UserRepo.ActivateUser(ctx, at.UserID); err != nil {
+		return err
+	}
+
+	if err := s.UserRepo.DeleteActivationToken(ctx, token); err != nil {
+		logrus.WithError(err).Warn("Failed to delete used activation token")
+	}
+
+	logrus.WithField("userID", at.UserID).Info("Account activated successfully")
+	return nil
+}
+
+/* Activation Account */
+
+func (s *AuthService) Register(ctx context.Context, req *modelUser.RegisterRequest) error {
 	logrus.WithField("email", req.Email).Info("Attempting user registration")
 
 	email, err := s.UserRepo.FindByEmail(ctx, req.Email)
@@ -53,7 +112,7 @@ func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest)
 		return err
 	}
 
-	user := models.User{
+	user := modelUser.User{
 		ID:        primitive.NewObjectID(),
 		FullName:  req.FullName,
 		Username:  req.Username,
@@ -73,11 +132,29 @@ func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest)
 		return err
 	}
 
+	token, err := generateActivationToken()
+	if err != nil {
+		return err
+	}
+
+	activation := &modelAuth.ActivationToken{
+		UserID:    user.ID.Hex(),
+		Token:     token,
+		CreatedAt: time.Now().Unix(),
+	}
+	if err := s.UserRepo.SaveActivationToken(ctx, activation); err != nil {
+		return err
+	}
+
+	if err := s.sendActivationEmail(user.Email, token); err != nil {
+		logrus.WithError(err).Error("Failed to send activation email")
+	}
+
 	logrus.WithField("email", req.Email).Info("User registered successfully")
 	return nil
 }
 
-func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (string, error) {
+func (s *AuthService) Login(ctx context.Context, req *modelUser.LoginRequest) (string, error) {
 	logrus.WithField("email", req.Email).Info("Attempting user login")
 
 	user, err := s.UserRepo.FindByEmail(ctx, req.Email)

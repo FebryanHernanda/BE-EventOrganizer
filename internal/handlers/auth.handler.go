@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"github.com/FebryanHernanda/BE-EventOrganizer/internal/models"
+	"github.com/FebryanHernanda/BE-EventOrganizer/internal/models/user"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/services"
 	"github.com/FebryanHernanda/BE-EventOrganizer/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -27,7 +27,7 @@ func NewAuthHandler(authService *services.AuthService) *AuthHandler {
 // @Failure     400   {object} map[string]interface{} "Bad request"
 // @Router      /auth/register [post]
 func (h *AuthHandler) Register(ctx *gin.Context) {
-	var req models.RegisterRequest
+	var req user.RegisterRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		logrus.WithField("error", err).Warn("Invalid JSON format in registration")
@@ -49,8 +49,27 @@ func (h *AuthHandler) Register(ctx *gin.Context) {
 	response.Success(ctx, nil, "User registration successfully")
 }
 
+/* Activation Account */
+
+func (h *AuthHandler) Activate(ctx *gin.Context) {
+	token := ctx.Query("token")
+	if token == "" {
+		response.Error(ctx, "Missing token", 400, nil)
+		return
+	}
+
+	if err := h.AuthService.ActivateAccount(ctx, token); err != nil {
+		response.Error(ctx, err.Error(), 400, nil)
+		return
+	}
+
+	response.Success(ctx, nil, "Account activated successfully, you can now login.")
+}
+
+/* Activation Account */
+
 func (h *AuthHandler) Login(ctx *gin.Context) {
-	var req models.LoginRequest
+	var req user.LoginRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		logrus.WithField("error", err).Warn("Invalid JSON format in login")

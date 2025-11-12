@@ -41,6 +41,7 @@ func main() {
 		port = "8080"
 	}
 
+	smtpConfig := config.LoadSMTPConfig()
 	jwtSecret := os.Getenv("JWT_SECRET")
 
 	healthRepo := repository.NewHealthRepository(db)
@@ -48,9 +49,12 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(healthService)
 
 	userRepo := repository.NewUserRepository(db)
-	authService := services.NewAuthService(userRepo, jwtSecret)
+	authRepo := repository.NewAuthRepository(db)
+
+	authService := services.NewAuthService(userRepo, jwtSecret, smtpConfig)
+	userService := services.NewUserService(authRepo, userRepo, jwtSecret)
+
 	authHandler := handlers.NewAuthHandler(authService)
-	userService := services.NewUserService(userRepo, jwtSecret)
 	userHandler := handlers.NewUserHandler(userService)
 
 	rh := &routers.RouteHandler{
@@ -63,5 +67,4 @@ func main() {
 
 	fmt.Println("Server running on port:", port)
 	router.Run(":" + port)
-
 }
