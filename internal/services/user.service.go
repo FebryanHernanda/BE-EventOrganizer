@@ -22,7 +22,7 @@ func NewUserService(authRepo *repository.AuthRepository, userRepo *repository.Us
 	}
 }
 
-func (s *UserService) GetProfile(ctx context.Context, userID string) (*modelUser.User, error) {
+func (s *UserService) GetProfile(ctx context.Context, userID string) (*modelUser.UserResponse, error) {
 	logrus.WithField("userID", userID).Info("Attempting get profile")
 
 	user, err := s.UserRepo.GetByID(ctx, userID)

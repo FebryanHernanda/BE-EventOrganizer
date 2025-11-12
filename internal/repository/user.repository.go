@@ -59,14 +59,14 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 	return &user, nil
 }
 
-func (r *UserRepository) GetByID(ctx context.Context, id string) (*modelUser.User, error) {
+func (r *UserRepository) GetByID(ctx context.Context, id string) (*modelUser.UserResponse, error) {
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		logrus.WithField("userID", id).WithError(err).Error("Invalid ObjectID")
 		return nil, err
 	}
 
-	var user modelUser.User
+	var user modelUser.UserResponse
 	err = r.Collection.FindOne(ctx, bson.M{"_id": objID}).Decode(&user)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
