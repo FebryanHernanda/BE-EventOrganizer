@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/FebryanHernanda/BE-EventOrganizer/config"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/handlers"
+	"github.com/FebryanHernanda/BE-EventOrganizer/internal/middleware"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/repository"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/routers"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/services"
+	"golang.org/x/time/rate"
 )
 
 // @title BE Event Organizer API
@@ -63,7 +66,12 @@ func main() {
 		User:   userHandler,
 	}
 
-	router := routers.SetupRouter(rh, jwtSecret)
+	deps := &middleware.MiddlewareDeps{
+		GlobalLimiter: middleware.NewRateLimiterStore(rate.Every(10*time.Second), 3),
+		AuthLimiter:   middleware.NewRateLimiterStore(rate.Every(time.Second/5), 10),
+	}
+
+	router := routers.SetupRouter(rh, jwtSecret, deps)
 
 	fmt.Println("Server running on port:", port)
 	router.Run(":" + port)

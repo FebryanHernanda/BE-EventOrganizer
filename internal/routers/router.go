@@ -16,15 +16,17 @@ type RouteHandler struct {
 	User   *handlers.UserHandler
 }
 
-func SetupRouter(rh *RouteHandler, jwtSecret string) *gin.Engine {
+func SetupRouter(rh *RouteHandler, jwtSecret string, deps *middleware.MiddlewareDeps) *gin.Engine {
 	router := gin.New()
 
 	router.Use(gin.Recovery())
 	router.Use(middleware.LoggerMiddleware())
 
+	router.Use(deps.GlobalLimiter.RateLimiterMiddleware())
+
 	// Routes
 	router.GET("/Health", rh.Health.HealthCheck)
-	AuthRoutes(router, rh.Auth)
+	AuthRoutes(router, rh.Auth, deps.AuthLimiter)
 	UserRoutes(router, rh.User, jwtSecret)
 
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
