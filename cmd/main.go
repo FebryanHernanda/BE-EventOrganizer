@@ -8,6 +8,8 @@ import (
 
 	"github.com/FebryanHernanda/BE-EventOrganizer/config"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/handlers"
+	"github.com/FebryanHernanda/BE-EventOrganizer/internal/mailer/provider"
+	mailerService "github.com/FebryanHernanda/BE-EventOrganizer/internal/mailer/services"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/middleware"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/repository"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/routers"
@@ -47,6 +49,8 @@ func main() {
 	smtpConfig := config.LoadSMTPConfig()
 	jwtSecret := os.Getenv("JWT_SECRET")
 
+	smtpProvider := provider.NewSMTPProvider(smtpConfig)
+
 	healthRepo := repository.NewHealthRepository(db)
 	healthService := services.NewHealthService(healthRepo)
 	healthHandler := handlers.NewHealthHandler(healthService)
@@ -54,7 +58,9 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	authRepo := repository.NewAuthRepository(db)
 
-	authService := services.NewAuthService(userRepo, jwtSecret, smtpConfig)
+	mailService := mailerService.NewMailerService(smtpProvider)
+
+	authService := services.NewAuthService(userRepo, mailService, jwtSecret)
 	userService := services.NewUserService(authRepo, userRepo, jwtSecret)
 
 	authHandler := handlers.NewAuthHandler(authService)

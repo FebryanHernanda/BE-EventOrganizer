@@ -5,10 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"time"
 
-	"github.com/FebryanHernanda/BE-EventOrganizer/config"
+	mailerService "github.com/FebryanHernanda/BE-EventOrganizer/internal/mailer/services"
 	modelAuth "github.com/FebryanHernanda/BE-EventOrganizer/internal/models/auth"
 	modelUser "github.com/FebryanHernanda/BE-EventOrganizer/internal/models/user"
 	"github.com/FebryanHernanda/BE-EventOrganizer/internal/repository"
@@ -17,20 +16,19 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
-	"gopkg.in/gomail.v2"
 )
 
 type AuthService struct {
-	UserRepo   *repository.UserRepository
-	JWTSecret  string
-	SMTPConfig config.SMTPConfig
+	UserRepo  *repository.UserRepository
+	Mailer    *mailerService.MailerService
+	JWTSecret string
 }
 
-func NewAuthService(userRepo *repository.UserRepository, jwtSecret string, smtp config.SMTPConfig) *AuthService {
+func NewAuthService(userRepo *repository.UserRepository, mailer *mailerService.MailerService, jwtSecret string) *AuthService {
 	return &AuthService{
-		UserRepo:   userRepo,
-		JWTSecret:  jwtSecret,
-		SMTPConfig: smtp,
+		UserRepo:  userRepo,
+		Mailer:    mailer,
+		JWTSecret: jwtSecret,
 	}
 }
 
@@ -42,24 +40,6 @@ func generateActivationToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(bytes), nil
-}
-
-func (s *AuthService) sendActivationEmail(to, token string) error {
-	link := fmt.Sprintf("http://localhost:8080/auth/activate?token=%s", token)
-	m := gomail.NewMessage()
-	m.SetHeader("From", s.SMTPConfig.From)
-	m.SetHeader("To", to)
-	m.SetHeader("Subject", "Activate your account")
-	m.SetBody("text/html", fmt.Sprintf("<p>Click <a href='%s'>here</a> to activate your account.</p>", link))
-
-	d := gomail.NewDialer(s.SMTPConfig.Host, s.SMTPConfig.Port, s.SMTPConfig.Username, s.SMTPConfig.Password)
-	if err := d.DialAndSend(m); err != nil {
-		logrus.WithError(err).Error("Failed to send activation email")
-		return err
-	}
-
-	logrus.WithField("email", to).Info("Activation email sent successfully")
-	return nil
 }
 
 func (s *AuthService) ActivateAccount(ctx context.Context, token string) error {
@@ -146,8 +126,13 @@ func (s *AuthService) Register(ctx context.Context, req *modelUser.RegisterReque
 		return err
 	}
 
-	if err := s.sendActivationEmail(user.Email, token); err != nil {
-		logrus.WithError(err).Error("Failed to send activation email")
+	if err := s.Mailer.SendActivationEmail(
+		user.FullName,
+		user.Email,
+		user.CreatedAt.Format("2006-01-02"),
+		token,
+	); err != nil {
+		logrus.WithError(err).Error("Activation email failed")
 	}
 
 	logrus.WithField("email", req.Email).Info("User registered successfully")
