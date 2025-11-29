@@ -60,7 +60,7 @@ func main() {
 
 	mailService := mailerService.NewMailerService(smtpProvider)
 
-	authService := services.NewAuthService(userRepo, mailService, jwtSecret)
+	authService := services.NewAuthService(userRepo, authRepo, mailService, jwtSecret)
 	userService := services.NewUserService(authRepo, userRepo, jwtSecret)
 
 	authHandler := handlers.NewAuthHandler(authService)

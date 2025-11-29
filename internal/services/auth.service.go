@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	mailerService "github.com/FebryanHernanda/BE-EventOrganizer/internal/mailer/services"
@@ -20,50 +21,28 @@ import (
 
 type AuthService struct {
 	UserRepo  *repository.UserRepository
+	AuthRepo  *repository.AuthRepository
 	Mailer    *mailerService.MailerService
 	JWTSecret string
 }
 
-func NewAuthService(userRepo *repository.UserRepository, mailer *mailerService.MailerService, jwtSecret string) *AuthService {
+func NewAuthService(userRepo *repository.UserRepository, authRepo *repository.AuthRepository, mailer *mailerService.MailerService, jwtSecret string) *AuthService {
 	return &AuthService{
 		UserRepo:  userRepo,
+		AuthRepo:  authRepo,
 		Mailer:    mailer,
 		JWTSecret: jwtSecret,
 	}
 }
 
-/* Activation Account */
-
 func generateActivationToken() (string, error) {
-	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	return hex.EncodeToString(bytes), nil
+
+	return hex.EncodeToString(b), nil
 }
-
-func (s *AuthService) ActivateAccount(ctx context.Context, token string) error {
-	at, err := s.UserRepo.FindActivationToken(ctx, token)
-	if err != nil {
-		return errors.New("invalid token")
-	}
-	if at == nil {
-		return errors.New("token not found or already used")
-	}
-
-	if err := s.UserRepo.ActivateUser(ctx, at.UserID); err != nil {
-		return err
-	}
-
-	if err := s.UserRepo.DeleteActivationToken(ctx, token); err != nil {
-		logrus.WithError(err).Warn("Failed to delete used activation token")
-	}
-
-	logrus.WithField("userID", at.UserID).Info("Account activated successfully")
-	return nil
-}
-
-/* Activation Account */
 
 func (s *AuthService) Register(ctx context.Context, req *modelUser.RegisterRequest) error {
 	logrus.WithField("email", req.Email).Info("Attempting user registration")
@@ -76,7 +55,6 @@ func (s *AuthService) Register(ctx context.Context, req *modelUser.RegisterReque
 		}).Error("Failed to check email")
 		return err
 	}
-
 	if email != nil {
 		return errors.New("email already registered")
 	}
@@ -103,7 +81,6 @@ func (s *AuthService) Register(ctx context.Context, req *modelUser.RegisterReque
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-
 	if err := s.UserRepo.CreateUser(ctx, &user); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"email": req.Email,
@@ -112,6 +89,7 @@ func (s *AuthService) Register(ctx context.Context, req *modelUser.RegisterReque
 		return err
 	}
 
+	_ = s.AuthRepo.DeleteActivationToken(ctx, user.ID.Hex())
 	token, err := generateActivationToken()
 	if err != nil {
 		return err
@@ -119,10 +97,13 @@ func (s *AuthService) Register(ctx context.Context, req *modelUser.RegisterReque
 
 	activation := &modelAuth.ActivationToken{
 		UserID:    user.ID.Hex(),
+		Email:     user.Email,
 		Token:     token,
-		CreatedAt: time.Now().Unix(),
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+		Used:      false,
+		CreatedAt: time.Now(),
 	}
-	if err := s.UserRepo.SaveActivationToken(ctx, activation); err != nil {
+	if err := s.AuthRepo.SaveActivationToken(ctx, activation); err != nil {
 		return err
 	}
 
@@ -139,23 +120,106 @@ func (s *AuthService) Register(ctx context.Context, req *modelUser.RegisterReque
 	return nil
 }
 
-func (s *AuthService) Login(ctx context.Context, req *modelUser.LoginRequest) (string, error) {
-	logrus.WithField("email", req.Email).Info("Attempting user login")
-
-	user, err := s.UserRepo.FindByEmail(ctx, req.Email)
-	if err != nil && err != mongo.ErrNoDocuments {
-		logrus.WithField("email", req.Email).Warn("Email not registered")
-		return "", errors.New("email not registered")
+func (s *AuthService) ActivateAccount(ctx context.Context, token string) error {
+	at, err := s.AuthRepo.FindValidActivationToken(ctx, token)
+	if err != nil {
+		logrus.WithError(err).Error("Failed activation token")
+		return errors.New("invalid activation token")
+	}
+	if at == nil {
+		logrus.Warn("Failed activation, link expired or invalid")
+		return errors.New("activation link expired or invalid")
 	}
 
+	if err := s.AuthRepo.ActivateUser(ctx, at.UserID); err != nil {
+		return err
+	}
+
+	_ = s.AuthRepo.MarkTokenUsed(ctx, token)
+
+	logrus.WithField("userID", at.UserID).Info("Account activated successfully")
+	return nil
+}
+
+func (s *AuthService) ResendActivation(ctx context.Context, email string) error {
+	user, err := s.UserRepo.FindByEmail(ctx, email)
+	if err != nil || user == nil {
+		logrus.WithError(err).Error("Failed fetching user by email")
+		return errors.New("email not registered")
+	}
+
+	if user.IsActive {
+		logrus.Warn("Account already activated, skip resend")
+		return errors.New("account already activate")
+	}
+
+	if err = s.AuthRepo.DeleteActivationToken(ctx, user.ID.Hex()); err != nil {
+		logrus.WithError(err).Warn("failed deleting old activation token")
+	}
+
+	token, err := generateActivationToken()
+	if err != nil {
+		logrus.WithError(err).Error(("Failed generating activation token"))
+		return errors.New("failed generating new token")
+	}
+
+	activation := &modelAuth.ActivationToken{
+		UserID:    user.ID.Hex(),
+		Email:     user.Email,
+		Token:     token,
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+		Used:      false,
+		CreatedAt: time.Now(),
+	}
+	if err := s.AuthRepo.SaveActivationToken(ctx, activation); err != nil {
+		logrus.WithError(err).Error("Failed saving activation token")
+		return errors.New("failed saving activation token")
+	}
+
+	if err := s.Mailer.SendActivationEmail(
+		user.FullName,
+		user.Email,
+		user.CreatedAt.Format("2006-01-02"),
+		token,
+	); err != nil {
+		logrus.WithError(err).Error("Failed sending activation email")
+		return errors.New("failed sending activation email")
+	}
+
+	logrus.Info("Resend activation email sent successfully")
+	return nil
+}
+
+func (s *AuthService) Login(ctx context.Context, req *modelUser.LoginRequest) (string, error) {
+	logrus.WithField("identifier", req.Identifier).Info("Attempting user login")
+
+	var user *modelUser.User
+	var err error
+
+	if strings.Contains(req.Identifier, "@") {
+		user, err = s.UserRepo.FindByEmail(ctx, req.Identifier)
+	} else {
+
+		user, err = s.UserRepo.FindByUsername(ctx, req.Identifier)
+	}
+
+	if err != nil && err != mongo.ErrNoDocuments {
+		logrus.WithField("identifier", req.Identifier).Warn("Email/Username not registered")
+		return "", errors.New("invalid credentials")
+	}
 	if user == nil {
-		logrus.WithField("email", req.Email).Warn("User not found (nil result)")
+		logrus.WithField("identifier", req.Identifier).Warn("User not found (nil result)")
 		return "", errors.New("invalid credentials")
 	}
 
+	if !user.IsActive {
+		logrus.WithField("userID", user.ID.Hex()).Warn("User attempted login but account is not active")
+		return "", errors.New("account not activated")
+	}
+
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		logrus.WithField("email", req.Email).Warn("Invalid password")
-		return "", errors.New("invalid password")
+		logrus.WithField("id", user.ID.Hex()).Warn("Invalid password")
+		return "", errors.New("invalid credentials")
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -170,6 +234,6 @@ func (s *AuthService) Login(ctx context.Context, req *modelUser.LoginRequest) (s
 		return "", err
 	}
 
-	logrus.WithField("email", req.Email).Info("Login successfully")
+	logrus.WithField("id", user.ID.Hex()).Info("Login successfully")
 	return tokenString, nil
 }

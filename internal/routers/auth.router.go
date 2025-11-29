@@ -13,4 +13,6 @@ func AuthRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, authLimit
 	auth.POST("/register", authHandler.Register)
 	auth.POST("/login", authHandler.Login)
 	auth.GET("/activate", authHandler.Activate)
+	auth.POST("/resend-activation", authHandler.ResendActivation)
+
 }

@@ -79,15 +79,3 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*modelUser.Use
 
 	return &user, nil
 }
-
-func (r *UserRepository) ActivateUser(ctx context.Context, userID string) error {
-	objID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return err
-	}
-	_, err = r.Collection.UpdateOne(ctx, bson.M{"_id": objID}, bson.M{"$set": bson.M{"is_active": true}})
-	if err != nil {
-		logrus.WithError(err).Error("Failed to activate user")
-	}
-	return err
-}

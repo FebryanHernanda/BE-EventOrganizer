@@ -17,15 +17,18 @@ func NewMailerService(provider *provider.SMTPProvider) *MailerService {
 }
 
 func (s *MailerService) SendActivationEmail(name, email, registeredDate, token string) error {
-	link := fmt.Sprintf("http://localhost:8080/auth/activate?token=%s", token)
+	link := fmt.Sprintf("http://localhost:3000/auth/activation?token=%s", token)
 
 	body := templates.ActivationTemplate(name, email, registeredDate, link)
 
 	if err := s.provider.Send(email, "Activate Your Account", body); err != nil {
-		logrus.WithError(err).Error("Failed sending activation email")
+		logrus.WithFields(logrus.Fields{
+			"email": email,
+			"error": err,
+		}).Error("Failed sending activation email")
 		return err
 	}
 
-	logrus.Info("Activation email sent successfully")
+	logrus.WithField("email", email).Info("Activation email sent successfully")
 	return nil
 }

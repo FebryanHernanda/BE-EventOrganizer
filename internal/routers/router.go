@@ -21,7 +21,7 @@ func SetupRouter(rh *RouteHandler, jwtSecret string, deps *middleware.Middleware
 
 	router.Use(gin.Recovery())
 	router.Use(middleware.LoggerMiddleware())
-
+	router.Use(middleware.CORSMiddleware())
 	router.Use(deps.GlobalLimiter.RateLimiterMiddleware())
 
 	// Routes

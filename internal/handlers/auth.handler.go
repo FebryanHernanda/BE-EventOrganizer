@@ -66,6 +66,24 @@ func (h *AuthHandler) Activate(ctx *gin.Context) {
 	response.Success(ctx, nil, "Account activated successfully, you can now login.")
 }
 
+func (h *AuthHandler) ResendActivation(ctx *gin.Context) {
+	var req struct {
+		Email string `json:"email"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.Error(ctx, "Invalid request body", 400, nil)
+		return
+	}
+
+	if err := h.AuthService.ResendActivation(ctx, req.Email); err != nil {
+		response.Error(ctx, err.Error(), 400, nil)
+		return
+	}
+
+	response.Success(ctx, nil, "Activation link has been sent to your email.")
+}
+
 /* Activation Account */
 
 func (h *AuthHandler) Login(ctx *gin.Context) {
@@ -80,14 +98,14 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 	token, err := h.AuthService.Login(ctx.Request.Context(), &req)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
-			"email": req.Email,
+			"email": req.Identifier,
 			"error": err,
 		}).Warn("Login failed")
 		response.Error(ctx, err.Error(), 401, nil)
 		return
 	}
 
-	logrus.WithField("email", req.Email).Info("User login successfully")
+	logrus.WithField("Identifier", req.Identifier).Info("User login successfully")
 
 	response.Success(ctx, gin.H{
 		"token": token,
